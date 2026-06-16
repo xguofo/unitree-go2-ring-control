@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<?xml-model href=""?>
+<package format="3">
+  <name>ring_control</name>
+  <version>0.0.1</version>
+  <description>Ring-driven Unitree sport mode control node.</description>
+  <maintainer email="shawnguo@example.com">shawnguo</maintainer>
+  <license>BSD-3-Clause</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
+  <depend>unitree_api</depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
