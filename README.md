@@ -2,13 +2,13 @@
 
 `ring_control` turns ring-style string inputs into Unitree Go2 sport-mode commands.
 
-The intended data flow is:
+Data flow:
 
 ```text
-raw ring string -> ring_gesture_bridge_node -> normalized gesture -> ring_control_node -> /api/sport/request
+physical ring TCP stream -> ring_tcp_bridge_node -> /ring/raw_signal -> ring_gesture_bridge_node -> /ring/gesture -> ring_control_node -> /api/sport/request
 ```
 
-For testing without ring hardware, use:
+For terminal-only testing:
 
 ```text
 ring_terminal_input_node -> /ring/raw_signal
@@ -25,8 +25,14 @@ ring_terminal_input_node -> /ring/raw_signal
 `ring_gesture_bridge_node`
 
 - Subscribes to `/ring/raw_signal`.
-- Maps raw strings such as `forward`, `cw`, and `lay_down`.
+- Maps raw strings like `forward`, `cw`, and `lay_down`.
 - Publishes canonical gestures to `/ring/gesture`.
+
+`ring_tcp_bridge_node`
+
+- Connects to the ring TCP server at `127.0.0.1:17888` by default.
+- Subscribes to the ring `swipe` stream.
+- Publishes each swipe `event` string to `/ring/raw_signal`.
 
 `ring_terminal_input_node`
 
@@ -50,11 +56,11 @@ ring_terminal_input_node -> /ring/raw_signal
 
 ## Motion Behavior
 
-Movement gestures create timed motion segments. A single movement gesture lasts for `segment_duration_ms` before stopping or switching to a pending command.
+Movement gestures create timed motion segments. A movement gesture lasts for `segment_duration_ms` before stopping or switching to a pending command.
 
-Conflicting movement commands do not replace the current command immediately. For example, `forward` followed by `left` keeps the forward segment active, stores `left` as the pending translation, stops briefly during the settle phase, then starts left strafe.
+Conflicting movement commands do not replace the current command immediately. Example: `forward` then `left` keeps the forward segment active, stores `left` as pending, pauses briefly, then starts left strafe.
 
-Only one pending translation is stored. If another conflicting translation arrives while one is pending, the newest pending command replaces the older one.
+Only one pending translation is stored. If another conflicting translation arrives while one is pending, the newest one replaces the older one.
 
 Repeated same-direction movement refreshes the active segment.
 
@@ -62,7 +68,7 @@ Turn gestures modify the active segment. If the robot is moving, `cw` and `ccw` 
 
 `pinch` or `stop` clears active and pending motion immediately.
 
-If `stand_down` arrives during motion, the current motion segment finishes first. The node then stops/settles and sends `StandDown`. While stand-down is pending, later movement and turn gestures are ignored.
+If `stand_down` arrives during motion, the current motion segment finishes first. The node then stops, settles, and sends `StandDown`. While stand-down is pending, later movement and turn gestures are ignored.
 
 While the robot is lying down or standing down, movement and turn gestures are ignored. `stand` / `stand_up` is accepted while lying down.
 
@@ -115,7 +121,7 @@ Do not run live control if these topics are not visible.
 
 ## Safe Dry Run
 
-Use a topic remap to test the full pipeline without publishing to the robot command topic.
+Use topic remapping to test motion without publishing to the real robot command topic.
 
 Terminal 1:
 
@@ -152,6 +158,39 @@ source "$UNITREE_ROS2_DIR/example/install/setup.bash"
 ros2 topic echo /ring/test_api_sport_request
 ```
 
+## Ring TCP Input
+
+Use these terminals when the physical ring is connected and the TCP ring server is running.
+
+Terminal 1:
+
+```bash
+cd "$UNITREE_ROS2_DIR"
+source ./setup.sh
+source ./example/install/setup.bash
+ros2 run ring_control ring_control_node
+```
+
+Terminal 2:
+
+```bash
+cd "$UNITREE_ROS2_DIR"
+source ./setup.sh
+source ./example/install/setup.bash
+ros2 run ring_control ring_gesture_bridge_node
+```
+
+Terminal 3:
+
+```bash
+cd "$UNITREE_ROS2_DIR"
+source ./setup.sh
+source ./example/install/setup.bash
+ros2 run ring_control ring_tcp_bridge_node
+```
+
+If you need manual string tests without ring hardware, use `ring_terminal_input_node` instead of `ring_tcp_bridge_node`.
+
 ## Run On The Robot
 
 Use three terminals.
@@ -180,28 +219,21 @@ Terminal 3:
 cd "$UNITREE_ROS2_DIR"
 source ./setup.sh
 source ./example/install/setup.bash
-ros2 run ring_control ring_terminal_input_node
+ros2 run ring_control ring_tcp_bridge_node
 ```
 
-Start with a conservative test sequence:
+Manual string tests:
 
 ```text
 help
 stop
 forward
-stop
 left
-stop
 right
-stop
 cw
-stop
-forward
-left
-stop
+ccw
 lay_down
 stand
-stop
 ```
 
 Keep a manual stop available. Do not run `custom_walk_node` and `ring_control_node` at the same time because both can publish sport commands.
@@ -224,26 +256,18 @@ Keep a manual stop available. Do not run `custom_walk_node` and `ring_control_no
 | `motion_cooldown_ms` | `100` | Short input cooldown for noisy ring gestures |
 | `posture_transition_ms` | `2500` | Local estimate for stand up/down completion |
 
-Common tuning:
-
-- Increase `segment_duration_ms` if one movement gesture is too short.
-- Adjust `left_speed` and `right_speed` if one strafe direction is weaker.
-- Adjust `forward_speed` for forward/backward speed.
-- Adjust `turn_speed` or `turn_step` for spin and arc turning.
-- Keep `gesture_timeout_ms` as a safety timeout, not as the normal action duration.
-
 ## Troubleshooting
 
 No robot topics are visible:
 
-- Check Wi-Fi or Ethernet connection.
+- Check the network connection.
 - Source `$UNITREE_ROS2_DIR/setup.sh`.
 - Confirm `ros2 topic echo --once /sportmodestate` returns data.
 
 Terminal tester reports unsupported input:
 
 - Type `help`.
-- Use one of the aliases listed in the supported input table.
+- Use one of the aliases in the supported input table.
 
 Robot moves too briefly:
 

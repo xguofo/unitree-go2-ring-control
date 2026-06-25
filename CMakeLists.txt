@@ -26,6 +26,10 @@ add_executable(ring_terminal_input_node
   src/ring_terminal_input_node.cpp
 )
 
+add_executable(ring_tcp_bridge_node
+  src/ring_tcp_bridge_node.cpp
+)
+
 ament_target_dependencies(ring_control_node
   rclcpp
   std_msgs
@@ -42,10 +46,16 @@ ament_target_dependencies(ring_terminal_input_node
   std_msgs
 )
 
+ament_target_dependencies(ring_tcp_bridge_node
+  rclcpp
+  std_msgs
+)
+
 install(TARGETS
   ring_control_node
   ring_gesture_bridge_node
   ring_terminal_input_node
+  ring_tcp_bridge_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
