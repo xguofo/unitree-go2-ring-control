@@ -63,7 +63,8 @@ std::string normalize_gesture(std::string value) {
 }
 
 std::pair<bool, MotionCommand> command_for_translation_gesture(
-    const std::string &gesture, double forward_speed, double left_speed,
+    const std::string &gesture, double forward_speed, double backward_speed,
+    double left_speed,
     double right_speed) {
   MotionCommand command;
 
@@ -73,7 +74,7 @@ std::pair<bool, MotionCommand> command_for_translation_gesture(
   }
 
   if (gesture == "swipe_backward") {
-    command.vx = -forward_speed;
+    command.vx = -backward_speed;
     return {true, command};
   }
 
@@ -104,7 +105,8 @@ public:
     // the ring bridge and robot behavior can be adjusted without recompiling.
     declare_parameter("gesture_topic", std::string(kGestureTopic));
     declare_parameter("forward_speed", 0.25);
-    declare_parameter("left_speed", 0.32);
+    declare_parameter("backward_speed", 0.30);
+    declare_parameter("left_speed", 0.40);
     declare_parameter("right_speed", 0.27);
     declare_parameter("turn_speed", 0.7);
     declare_parameter("turn_step", 0.2);
@@ -141,6 +143,7 @@ private:
     // parameters rather than live parameter updates.
     gesture_topic_ = get_parameter("gesture_topic").as_string();
     forward_speed_ = get_parameter("forward_speed").as_double();
+    backward_speed_ = get_parameter("backward_speed").as_double();
     left_speed_ = get_parameter("left_speed").as_double();
     right_speed_ = get_parameter("right_speed").as_double();
     turn_speed_ = get_parameter("turn_speed").as_double();
@@ -185,13 +188,13 @@ private:
     }
 
     if (gesture == "stand" || gesture == "stand_up" || gesture == "lay_down" ||
-        gesture == "stand_down") {
+        gesture == "stand_down" || gesture == "posture_toggle") {
       return GestureKind::kPosture;
     }
 
     const auto [recognized, unused_command] =
-        command_for_translation_gesture(gesture, forward_speed_, left_speed_,
-                                        right_speed_);
+        command_for_translation_gesture(gesture, forward_speed_, backward_speed_,
+                                        left_speed_, right_speed_);
     static_cast<void>(unused_command);
     return recognized ? GestureKind::kTranslation : GestureKind::kUnknown;
   }
@@ -206,6 +209,18 @@ private:
   }
 
   void handle_posture_gesture(const std::string &gesture) {
+    if (gesture == "posture_toggle") {
+      // Tap is mapped here so one gesture can stand the robot up if it is
+      // already down, or make it lie down if it is currently up.
+      if (posture_state_ == PostureState::kLyingDown ||
+          posture_state_ == PostureState::kStandingDown) {
+        handle_stand_up_gesture();
+      } else {
+        handle_stand_down_gesture();
+      }
+      return;
+    }
+
     if (gesture == "stand" || gesture == "stand_up") {
       handle_stand_up_gesture();
       return;
@@ -308,8 +323,8 @@ private:
     }
 
     const auto [recognized, command] =
-        command_for_translation_gesture(gesture, forward_speed_, left_speed_,
-                                        right_speed_);
+        command_for_translation_gesture(gesture, forward_speed_, backward_speed_,
+                                        left_speed_, right_speed_);
     if (!recognized) {
       RCLCPP_WARN(get_logger(), "Ignoring unknown translation gesture: '%s'",
                   gesture.c_str());
@@ -613,7 +628,8 @@ private:
 
   std::string gesture_topic_;
   double forward_speed_{0.25};
-  double left_speed_{0.32};
+  double backward_speed_{0.30};
+  double left_speed_{0.40};
   double right_speed_{0.27};
   double turn_speed_{0.7};
   double turn_step_{0.2};
