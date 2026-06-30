@@ -44,11 +44,12 @@ ring_terminal_input_node -> /ring/raw_signal
 
 | 原始输入别名 | 标准手势 | 行为 |
 | --- | --- | --- |
-| `forward`, `swipe_forward` | `swipe_forward` | 前进 |
-| `backward`, `swipe_backward` | `swipe_backward` | 后退 |
+| `forward`, `swipe_forward`, `swipe_up` | `swipe_forward` | 前进 |
+| `backward`, `swipe_backward`, `swipe_down` | `swipe_backward` | 后退 |
 | `left`, `swipe_left` | `swipe_left` | 向左平移 |
 | `right`, `swipe_right` | `swipe_right` | 向右平移 |
 | `pinch`, `stop` | `pinch` | 立即停止 |
+| `tap` | `posture_toggle` | 在趴下和站起之间切换 |
 | `stand`, `stand_up`, `standup`, `up` | `stand_up` | 站起 |
 | `lay_down`, `laydown`, `lie_down`, `liedown`, `down`, `stand_down`, `standdown` | `stand_down` | 趴下 |
 | `cw`, `clockwise`, `spin_clockwise` | `spin_clockwise` | 顺时针转向；移动中会变成弧线运动 |
@@ -70,7 +71,9 @@ ring_terminal_input_node -> /ring/raw_signal
 
 如果在运动过程中收到 `stand_down`，当前运动片段会先完成，然后节点停止、短暂停顿，并发送 `StandDown`。在 `stand_down` 等待期间，后续移动和转向手势会被忽略。
 
-当机器人处于趴下或正在趴下状态时，移动和转向手势会被忽略。趴下后只接受 `stand` / `stand_up`。
+`tap` 会被映射成 `posture_toggle`。如果机器人当前是站立状态，`tap` 会触发趴下；如果机器人已经趴下，或者正在执行趴下，`tap` 会触发站起。
+
+当机器人处于趴下或正在趴下状态时，移动和转向手势会被忽略。此时仍接受 `tap`、`stand` 和 `stand_up`，用于重新站起。
 
 ## 编译
 
@@ -226,14 +229,16 @@ ros2 run ring_control ring_tcp_bridge_node
 
 ```text
 help
-stop
-forward
+pinch
+swipe_up
+swipe_down
 left
 right
 cw
 ccw
+tap
 lay_down
-stand
+stand_up
 ```
 
 测试时保持手动停止手段可用。不要同时运行 `custom_walk_node` 和 `ring_control_node`，因为它们都会向 sport 控制 topic 发布指令。
@@ -243,8 +248,9 @@ stand
 | 参数 | 默认值 | 含义 |
 | --- | ---: | --- |
 | `gesture_topic` | `/ring/gesture` | 标准手势输入 topic |
-| `forward_speed` | `0.25` | 前进/后退速度幅值 |
-| `left_speed` | `0.32` | 左平移速度 |
+| `forward_speed` | `0.25` | 前进速度 |
+| `backward_speed` | `0.30` | 后退速度 |
+| `left_speed` | `0.40` | 左平移速度 |
 | `right_speed` | `0.27` | 右平移速度 |
 | `turn_speed` | `0.7` | 原地转向速度 |
 | `turn_step` | `0.2` | 移动中每次转向手势增加的 yaw |

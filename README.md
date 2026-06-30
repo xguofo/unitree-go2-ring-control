@@ -44,11 +44,12 @@ ring_terminal_input_node -> /ring/raw_signal
 
 | Raw input aliases | Normalized gesture | Behavior |
 | --- | --- | --- |
-| `forward`, `swipe_forward` | `swipe_forward` | Move forward |
-| `backward`, `swipe_backward` | `swipe_backward` | Move backward |
+| `forward`, `swipe_forward`, `swipe_up` | `swipe_forward` | Move forward |
+| `backward`, `swipe_backward`, `swipe_down` | `swipe_backward` | Move backward |
 | `left`, `swipe_left` | `swipe_left` | Strafe left |
 | `right`, `swipe_right` | `swipe_right` | Strafe right |
 | `pinch`, `stop` | `pinch` | Stop immediately |
+| `tap` | `posture_toggle` | Toggle stand down / stand up |
 | `stand`, `stand_up`, `standup`, `up` | `stand_up` | Stand up |
 | `lay_down`, `laydown`, `lie_down`, `liedown`, `down`, `stand_down`, `standdown` | `stand_down` | Stand down / lie down |
 | `cw`, `clockwise`, `spin_clockwise` | `spin_clockwise` | Turn clockwise, or arc clockwise while moving |
@@ -70,7 +71,9 @@ Turn gestures modify the active segment. If the robot is moving, `cw` and `ccw` 
 
 If `stand_down` arrives during motion, the current motion segment finishes first. The node then stops, settles, and sends `StandDown`. While stand-down is pending, later movement and turn gestures are ignored.
 
-While the robot is lying down or standing down, movement and turn gestures are ignored. `stand` / `stand_up` is accepted while lying down.
+`tap` is mapped to `posture_toggle`. If the robot is up, `tap` requests stand down. If the robot is already down or is in the middle of standing down, `tap` requests stand up.
+
+While the robot is lying down or standing down, movement and turn gestures are ignored. `tap`, `stand`, and `stand_up` are still accepted so the robot can stand back up.
 
 ## Build
 
@@ -226,14 +229,16 @@ Manual string tests:
 
 ```text
 help
-stop
-forward
+pinch
+swipe_up
+swipe_down
 left
 right
 cw
 ccw
+tap
 lay_down
-stand
+stand_up
 ```
 
 Keep a manual stop available. Do not run `custom_walk_node` and `ring_control_node` at the same time because both can publish sport commands.
@@ -243,8 +248,9 @@ Keep a manual stop available. Do not run `custom_walk_node` and `ring_control_no
 | Parameter | Default | Meaning |
 | --- | ---: | --- |
 | `gesture_topic` | `/ring/gesture` | Canonical gesture input topic |
-| `forward_speed` | `0.25` | Forward/backward speed magnitude |
-| `left_speed` | `0.32` | Left strafe speed |
+| `forward_speed` | `0.25` | Forward speed |
+| `backward_speed` | `0.30` | Backward speed |
+| `left_speed` | `0.40` | Left strafe speed |
 | `right_speed` | `0.27` | Right strafe speed |
 | `turn_speed` | `0.7` | Idle spin yaw speed |
 | `turn_step` | `0.2` | Yaw increment when turning during movement |
