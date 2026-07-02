@@ -243,6 +243,124 @@ stand_up
 
 测试时保持手动停止手段可用。不要同时运行 `custom_walk_node` 和 `ring_control_node`，因为它们都会向 sport 控制 topic 发布指令。
 
+## 无线测试到机器人侧电脑
+
+如果笔记本已经可以通过 Wi-Fi 访问机器人侧电脑，一个比较实用的无网线测试路径是：
+
+```text
+笔记本 / 戒指应用 -> Wi-Fi 网络 -> 机器人侧电脑 -> 机器人内部以太网侧 -> /api/sport/request
+```
+
+这样可以避免把完整的 ROS 2 sport 控制链路直接从笔记本走 Wi-Fi。
+
+先在机器人侧电脑上找出 Wi-Fi 地址：
+
+```bash
+nmcli device status
+ip -brief addr show wlan0
+ip route
+```
+
+找到 `wlan0` 上的 IPv4 地址后，在下面命令中把它替换为 `ROBOT_WIFI_IP`。
+
+笔记本侧 Wi-Fi 检查：
+
+```bash
+ping -c 3 ROBOT_WIFI_IP
+ssh unitree@ROBOT_WIFI_IP
+```
+
+如果机器人侧工作区里还没有 `ring_control` 包，可以先复制过去，并且只编译这个包。不同机器人上的工作区目录结构可能不同，下面示例对应的是机器人源码树位于 `~/go2_ros2_ws/src/go2_ros2_toolbox/example` 的情况：
+
+```bash
+tar -C "$UNITREE_ROS2_DIR/example" -czf - ring_control | \
+ssh unitree@ROBOT_WIFI_IP 'mkdir -p ~/go2_ros2_ws/src/go2_ros2_toolbox/example && tar -C ~/go2_ros2_ws/src/go2_ros2_toolbox/example -xzf -'
+```
+
+```bash
+ssh unitree@ROBOT_WIFI_IP
+source /opt/ros/foxy/setup.bash
+cd ~/go2_ros2_ws
+colcon build --packages-select ring_control
+source install/setup.bash
+```
+
+如果机器人侧是 Foxy 工作区，而 `ros2 run` 报 CycloneDDS XML 解析错误，可以在每个终端里先执行这个临时规避命令：
+
+```bash
+unset CYCLONEDDS_URI
+```
+
+在机器人侧电脑上进行无线终端输入测试：
+
+终端 1：
+
+```bash
+source /opt/ros/foxy/setup.bash
+source ~/go2_ros2_ws/install/setup.bash
+unset CYCLONEDDS_URI
+ros2 run ring_control ring_control_node
+```
+
+终端 2：
+
+```bash
+source /opt/ros/foxy/setup.bash
+source ~/go2_ros2_ws/install/setup.bash
+unset CYCLONEDDS_URI
+ros2 run ring_control ring_gesture_bridge_node
+```
+
+终端 3：
+
+```bash
+source /opt/ros/foxy/setup.bash
+source ~/go2_ros2_ws/install/setup.bash
+unset CYCLONEDDS_URI
+ros2 run ring_control ring_terminal_input_node
+```
+
+在拔掉笔记本以太网前，建议先保持下面两个连接稳定：
+
+```bash
+ping ROBOT_WIFI_IP
+```
+
+```bash
+ssh unitree@ROBOT_WIFI_IP
+```
+
+确认两者都稳定后，再拔掉以太网。
+
+## 结束测试与断开连接
+
+结束实时测试时，建议按这个顺序操作：
+
+1. 在终端输入测试器中发送 `pinch` 或 `stop`。
+2. 等待机器人完全停止。
+3. 在 `ring_terminal_input_node` 终端按 `Ctrl+C`。
+4. 在 `ring_gesture_bridge_node` 终端按 `Ctrl+C`。
+5. 在 `ring_control_node` 终端按 `Ctrl+C`。
+6. 如果同时运行了 `ring_tcp_bridge_node`，也用 `Ctrl+C` 停掉它。
+
+如果测试后想断开机器人侧 Wi-Fi，可以先查看当前激活的连接：
+
+```bash
+nmcli connection show --active
+```
+
+然后按连接名断开：
+
+```bash
+sudo nmcli connection down YOUR_WIFI_CONNECTION_NAME
+```
+
+然后关闭 SSH 会话：
+
+```bash
+exit
+```
+
 ## 参数
 
 | 参数 | 默认值 | 含义 |
@@ -288,3 +406,20 @@ stand_up
 - 检查是否有 pending 的 `stand_down`。
 - 检查机器人是否处于趴下、正在站起或正在趴下状态。
 - 查看 `ring_control_node` 日志。
+
+`ros2 run` 报 CycloneDDS XML 解析错误：
+
+- 检查 `CYCLONEDDS_URI` 是否指向了一个损坏的 XML 文件。
+- 临时规避方法是在启动节点前先执行 `unset CYCLONEDDS_URI`。
+
+热点已连接过，但无线 ping 失败：
+
+- 用 `ip -brief addr` 检查 `wlan0` 是否还存在。
+- 用 `lsusb` 检查 USB Wi-Fi dongle 是否还在。
+- 如果 dongle 消失了，重新插拔后再重新连接目标 Wi-Fi 配置。
+
+机器人侧 Wi-Fi 扫描不到任何 SSID，或者扫描命令经常超时：
+
+- 查看 `sudo dmesg | tail -n 80`。
+- 如果看到 scan timeout 或 driver queue crash，说明 Wi-Fi dongle 或驱动不稳定。
+- 这种情况下，优先使用以太网，或者换一个兼容性更好的 USB Wi-Fi dongle。
