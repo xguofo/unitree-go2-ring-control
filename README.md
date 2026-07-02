@@ -243,6 +243,124 @@ stand_up
 
 Keep a manual stop available. Do not run `custom_walk_node` and `ring_control_node` at the same time because both can publish sport commands.
 
+## Wireless Robot-Side Test
+
+If the laptop can reach the robot-side computer over Wi-Fi, a practical cable-free test path is:
+
+```text
+laptop / ring app -> Wi-Fi network -> robot-side computer -> robot ethernet side -> /api/sport/request
+```
+
+This avoids sending the full ROS 2 sport-control path from the laptop directly over Wi-Fi.
+
+First, find the robot-side Wi-Fi address. On the robot-side computer:
+
+```bash
+nmcli device status
+ip -brief addr show wlan0
+ip route
+```
+
+Look for the IPv4 address on `wlan0`, then substitute it below as `ROBOT_WIFI_IP`.
+
+Laptop-side Wi-Fi checks:
+
+```bash
+ping -c 3 ROBOT_WIFI_IP
+ssh unitree@ROBOT_WIFI_IP
+```
+
+If the `ring_control` package is not already on the robot-side workspace, copy it into the robot workspace and build only that package. The exact workspace layout may differ between robots; the example below matches a workspace where the robot-side source tree lives under `~/go2_ros2_ws/src/go2_ros2_toolbox/example`:
+
+```bash
+tar -C "$UNITREE_ROS2_DIR/example" -czf - ring_control | \
+ssh unitree@ROBOT_WIFI_IP 'mkdir -p ~/go2_ros2_ws/src/go2_ros2_toolbox/example && tar -C ~/go2_ros2_ws/src/go2_ros2_toolbox/example -xzf -'
+```
+
+```bash
+ssh unitree@ROBOT_WIFI_IP
+source /opt/ros/foxy/setup.bash
+cd ~/go2_ros2_ws
+colcon build --packages-select ring_control
+source install/setup.bash
+```
+
+For Foxy-based robot-side workspaces, if `ros2 run` fails with a CycloneDDS XML parser error, use this temporary workaround in every terminal before launching nodes:
+
+```bash
+unset CYCLONEDDS_URI
+```
+
+Wireless terminal-input test from the robot-side computer:
+
+Terminal 1:
+
+```bash
+source /opt/ros/foxy/setup.bash
+source ~/go2_ros2_ws/install/setup.bash
+unset CYCLONEDDS_URI
+ros2 run ring_control ring_control_node
+```
+
+Terminal 2:
+
+```bash
+source /opt/ros/foxy/setup.bash
+source ~/go2_ros2_ws/install/setup.bash
+unset CYCLONEDDS_URI
+ros2 run ring_control ring_gesture_bridge_node
+```
+
+Terminal 3:
+
+```bash
+source /opt/ros/foxy/setup.bash
+source ~/go2_ros2_ws/install/setup.bash
+unset CYCLONEDDS_URI
+ros2 run ring_control ring_terminal_input_node
+```
+
+Before unplugging the laptop Ethernet cable, keep these running:
+
+```bash
+ping ROBOT_WIFI_IP
+```
+
+```bash
+ssh unitree@ROBOT_WIFI_IP
+```
+
+Only remove Ethernet after both stay stable.
+
+## Stop And Disconnect
+
+To end a live session cleanly:
+
+1. In the terminal-input tester, send `pinch` or `stop`.
+2. Wait for the robot to stop moving completely.
+3. Press `Ctrl+C` in `ring_terminal_input_node`.
+4. Press `Ctrl+C` in `ring_gesture_bridge_node`.
+5. Press `Ctrl+C` in `ring_control_node`.
+6. If `ring_tcp_bridge_node` is running, stop it with `Ctrl+C` as well.
+
+If you want to disconnect robot-side Wi-Fi after testing, first list active connections:
+
+```bash
+nmcli connection show --active
+```
+
+Then disconnect the active Wi-Fi connection by name:
+
+```bash
+sudo nmcli connection down YOUR_WIFI_CONNECTION_NAME
+```
+
+Then close SSH sessions:
+
+```bash
+exit
+```
+
 ## Parameters
 
 | Parameter | Default | Meaning |
@@ -288,3 +406,20 @@ Robot ignores motion:
 - Check whether `stand_down` is pending.
 - Check whether the robot is lying down or in a stand-up / stand-down transition.
 - Watch the `ring_control_node` logs.
+
+`ros2 run` fails with a CycloneDDS XML parser error:
+
+- Check whether `CYCLONEDDS_URI` points to a malformed XML file.
+- As a quick workaround, run `unset CYCLONEDDS_URI` before launching nodes.
+
+Wireless ping fails even though the hotspot was connected earlier:
+
+- Check whether `wlan0` still exists with `ip -brief addr`.
+- Check whether the USB Wi-Fi dongle is still visible with `lsusb`.
+- If the dongle disappeared, replug it and reconnect the intended Wi-Fi profile.
+
+Robot-side Wi-Fi scans return no SSIDs or scan commands time out:
+
+- Check `sudo dmesg | tail -n 80`.
+- If you see scan timeouts or driver queue crashes, the Wi-Fi dongle or driver is unstable.
+- In that case, prefer Ethernet or a different USB Wi-Fi adapter.
