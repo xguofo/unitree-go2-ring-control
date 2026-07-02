@@ -595,8 +595,9 @@ private:
   }
 
   rclcpp::Duration duration_from_ms(int64_t milliseconds) const {
-    return rclcpp::Duration::from_nanoseconds(
-        std::chrono::milliseconds(milliseconds).count() * 1000000LL);
+    return rclcpp::Duration(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::milliseconds(milliseconds)));
   }
 
   std::string make_move_payload(const MotionCommand &command) const {
